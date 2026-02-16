@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>MOI Akkugyár térkép</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  body { margin:0; }
+  #map { height:100vh; }
+</style>
+</head>
+
+<body>
+
+<div id="map"></div>
+
+<script>
+var map = L.map('map').setView([47.2, 19.3], 7);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap'
+}).addTo(map);
+
+// 🔴 CELLA GYÁR
+var cella = [
+["Debrecen (CATL)",47.5316,21.6273],
+["Göd (Samsung)",47.6833,19.1342],
+["Iváncsa (SK)",47.1510,18.8200],
+["Komárom (SK)",47.7430,18.1220]
+];
+
+// 🔵 BESZÁLLÍTÓ
+var besz = [
+["Nyíregyháza",47.9554,21.7167],
+["Fót",47.6167,19.1833],
+["Sóskút",47.4066,18.8264],
+["Szolnok",47.1730,20.1940]
+];
+
+// 🟢 HULLADÉK
+var hull = [
+["Vésztő",46.9333,21.2667],
+["Sajóbábony",48.1667,20.7333],
+["Kazincbarcika",48.2500,20.6333],
+["Tiszaújváros",47.9333,21.0500]
+];
+
+// 🟠 IPAR / AUTÓ
+var ipar = [
+["Kecskemét",46.9062,19.6913],
+["Győr",47.6875,17.6504],
+["Esztergom",47.7928,18.7414],
+["Szentgotthárd",46.9528,16.2730]
+];
+
+// 🔘 LOGISZTIKA
+var log = [
+["Vecsés",47.4071,19.2865],
+["Üllő",47.3833,19.3500],
+["Biatorbágy",47.4706,18.8183],
+["Tatabánya",47.5862,18.3948],
+["Dunaharaszti",47.3547,19.0986]
+];
+
+// FUNKCIÓ
+function addPoints(data, color) {
+  data.forEach(function(p){
+    L.circleMarker([p[1], p[2]], {
+      color: color,
+      radius: 6,
+      fillOpacity: 0.8
+    }).addTo(map).bindPopup(p[0]);
+  });
+}
+
+// RAJZOLÁS
+addPoints(cella, "red");
+addPoints(besz, "blue");
+addPoints(hull, "green");
+addPoints(ipar, "orange");
+addPoints(log, "purple");
+
+</script>
+
+</body>
+</html>

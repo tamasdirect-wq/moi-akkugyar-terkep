@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Magyar akkuipari hálózat – cégek, helyek, települések (rétegek szerint)</title>
+
+  <!-- Leaflet -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+  />
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+  ></script>
+
+  <!-- MarkerCluster (opcionális, de sok pontnál hasznos) -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+  />
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+  />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; width: 100%; }
+
+    .legend {
+      background: rgba(255,255,255,0.92);
+      padding: 10px 12px;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+      line-height: 1.25;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-size: 13px;
+      max-width: 320px;
+    }
+    .legend h3 { margin: 0 0 8px 0; font-size: 14px; }
+    .legend .row { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+    .swatch {
+      width: 12px; height: 12px; border-radius: 999px;
+      border: 1px solid rgba(0,0,0,0.25);
+      flex: 0 0 12px;
+    }
+    .note {
+      margin-top: 8px;
+      color: #444;
+      font-size: 12px;
+    }
+
+    /* kis “status” doboz geokódoláshoz */
+    .status {
+      background: rgba(0,0,0,0.65);
+      color: #fff;
+      padding: 8px 10px;
+      border-radius: 10px;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      font-size: 12px;
+      max-width: 340px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="map"></div>
+
+  <script>
+    // =========================
+    // 0) ALAP TÉRKÉP (NINCS VÍZ/LÁKOSSÁG BUBORÉK, CSAK PONTOK + RÉTEGEK)
+    // =========================
+    const map = L.map("map", {
+      zoomControl: true,
+      preferCanvas: true
+    }).setView([47.2, 19.3], 7);
+
+    // OSM alaptérkép (semmi extra buborék, semmi vízréteg overlay)
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 18,
+      attribution: '&copy; OpenStreetMap közreműködők'
+    }).addTo(map);
+
+    // =========================
+    // 1) KATEGÓRIA SZÍNEK (rétegek)
+    // =========================
+    const COLORS = {
+      "🔴 Cellagyár (akku-cella)": "#d7263d",
+      "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)": "#f57c00",
+      "🟡 Modul / összeszerelés / rendszer": "#f6c026",
+      "🟢 Kisebb beszállítók / alkatrészgyártás": "#2e7d32",
+      "🔵 Újrahasznosítás / hulladék": "#1e88e5",
+      "⚫ Egyéb kapcsolódó helyek": "#212121"
+    };
+
+    function markerStyle(color) {
+      return {
+        radius: 7,
+        color: "rgba(0,0,0,0.35)",
+        weight: 1,
+        fillColor: color,
+        fillOpacity: 0.95
+      };
+    }
+
+    // =========================
+    // 2) ADATOK (cégek, helyek, települések) – ahogy kérted
+    // =========================
+    const DATA = [
+      // 🔴 1. NAGY AKKUCELLA-GYÁRTÓK
+      { category: "🔴 Cellagyár (akku-cella)", place: "Debrecen, Hungary", company: "CATL", detail: "óriás beruházás (cellagyártás)" },
+      { category: "🔴 Cellagyár (akku-cella)", place: "Göd, Hungary", company: "Samsung SDI", detail: "cellagyártás" },
+      { category: "🔴 Cellagyár (akku-cella)", place: "Komárom, Hungary", company: "SK On", detail: "cellagyártás" },
+      { category: "🔴 Cellagyár (akku-cella)", place: "Iváncsa, Hungary", company: "SK On", detail: "cellagyártás" },
+      { category: "🔴 Cellagyár (akku-cella)", place: "Miskolc, Hungary", company: "GS Yuasa", detail: "cellagyártás" },
+
+      // 🟠 2. AKKUALKATRÉSZ-GYÁRTÁS (katód/szeparátor/elektrolit/rézfólia)
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Debrecen, Hungary", company: "EcoPro BM", detail: "katód / alapanyag" },
+
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Debrecen, Hungary", company: "Semcorp", detail: "szeparátor" },
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Nyíregyháza, Hungary", company: "W-Scope", detail: "szeparátor" },
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Nyergesújfalu, Hungary", company: "LG Chem / Toray", detail: "szeparátor (kapcsolódó)" },
+
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Sóskút, Hungary", company: "Dongwha", detail: "elektrolit / vegyipar" },
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Tatabánya, Hungary", company: "Soulbrain", detail: "elektrolit / vegyipar" },
+
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Gödöllő, Hungary", company: "Iljin Materials", detail: "rézfólia / vezető anyag" },
+      { category: "🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)", place: "Tatabánya, Hungary", company: "Solus Advanced Materials", detail: "rézfólia / vezető anyag" },
+
+      // 🟡 3. MODUL / ÖSSZESZERELÉS / RENDSZER
+      { category: "🟡 Modul / összeszerelés / rendszer", place: "Komárom, Hungary", company: "Inzi Controls", detail: "modul" },
+      { category: "🟡 Modul / összeszerelés / rendszer", place: "Fót, Hungary", company: "Több cég", detail: "akkumulátor összeszerelés (gyűjtőpont)" },
+      { category: "🟡 Modul / összeszerelés / rendszer", place: "Debrecen, Hungary", company: "BMW", detail: "akku összeszerelés az autóhoz" },
+      { category: "🟡 Modul / összeszerelés / rendszer", place: "Biatorbágy, Hungary", company: "NIO", detail: "akkucsere rendszerek" },
+
+      // 🟢 4. KISEBB BESZÁLLÍTÓK / ALKATRÉSZGYÁRTÁS
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Gödöllő, Hungary", company: "Kedali", detail: "fém alkatrészek" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Vác, Hungary", company: "–", detail: "akkumulátor rendszerező / logisztika" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Gödöllő, Hungary", company: "–", detail: "akkumulátorház gyártás (említett)" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Vác, Hungary", company: "–", detail: "akkumulátorház gyártás (említett)" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Monor, Hungary", company: "–", detail: "akkukeret gyártás" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Jászberény, Hungary", company: "–", detail: "alkatrészgyártás" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Pécel, Hungary", company: "–", detail: "gépipari beszállító" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Salgótarján, Hungary", company: "–", detail: "precíziós alkatrészek" },
+      { category: "🟢 Kisebb beszállítók / alkatrészgyártás", place: "Tatabánya, Hungary", company: "Lotte Aluminium", detail: "alumínium (beszállítói lánc)" },
+
+      // 🔵 5. ÚJRAHASZNOSÍTÁS / HULLADÉK
+      { category: "🔵 Újrahasznosítás / hulladék", place: "Szigetszentmiklós, Hungary", company: "SungEel Hitech", detail: "újrahasznosítás / hulladék" },
+      { category: "🔵 Újrahasznosítás / hulladék", place: "Bátonyterenye, Hungary", company: "SungEel Hitech", detail: "újrahasznosítás / hulladék" },
+
+      // ⚫ 6. EGYÉB KAPCSOLÓDÓ HELYEK
+      { category: "⚫ Egyéb kapcsolódó helyek", place: "Győr, Hungary", company: "–", detail: "potenciális akkuipari beszállítók" },
+      { category: "⚫ Egyéb kapcsolódó helyek", place: "Fót, Hungary", company: "–", detail: "több összeszerelő/logisztikai egység" },
+      { category: "⚫ Egyéb kapcsolódó helyek", place: "Debrecen, Hungary", company: "–", detail: "teljes ökoszisztéma (CATL + beszállítók)" }
+    ];
+
+    // =========================
+    // 3) RÉTEGEK (LayerGroups) + CLUSTER
+    // =========================
+    const layerGroups = {};
+    const clusters = {}; // kategóriánként külön cluster
+
+    for (const cat of Object.keys(COLORS)) {
+      const cluster = L.markerClusterGroup({
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        disableClusteringAtZoom: 11
+      });
+      clusters[cat] = cluster;
+      layerGroups[cat] = cluster;
+    }
+
+    // Alapból ezek legyenek bekapcsolva (tetszés szerint)
+    layerGroups["🔴 Cellagyár (akku-cella)"].addTo(map);
+    layerGroups["🟠 Alkatrész / vegyipar (katód/szeparátor/elektrolit/rézfólia)"].addTo(map);
+    layerGroups["🟡 Modul / összeszerelés / rendszer"].addTo(map);
+    layerGroups["🔵 Újrahasznosítás / hulladék"].addTo(map);
+
+    // Layer control (rétegkapcsoló)
+    L.control.layers(
+      null,
+      layerGroups,
+      { collapsed: false }
+    ).addTo(map);
+
+    // =========================
+    // 4) GEOKÓDOLÁS (Nominatim – kulcs nélkül)
+    //    -> így nem kell neked kézzel koordinátázni minden települést
+    // =========================
+    const statusCtl = L.control({ position: "bottomleft" });
+    statusCtl.onAdd = () => {
+      const div = L.DomUtil.create("div", "status");
+      div.id = "statusBox";
+      div.textContent = "Pontok betöltése… (települések geokódolása)";
+      return div;
+    };
+    statusCtl.addTo(map);
+
+    function setStatus(text) {
+      const el = document.getElementById("statusBox");
+      if (el) el.textContent = text;
+    }
+
+    // Egyszerű cache (helynév -> [lat,lon])
+    const geoCache = new Map();
+
+    async function geocode(place) {
+      if (geoCache.has(place)) return geoCache.get(place);
+
+      const url =
+        "https://nominatim.openstreetmap.org/search?format=json&limit=1&addressdetails=0" +
+        "&q=" + encodeURIComponent(place);
+
+      const res = await fetch(url, {
+        headers: {
+          // Nominatim kéri az azonosítható UA-t; böngészőben ez nem mindig állítható.
+          // Ez így is működik a legtöbb esetben.
+          "Accept": "application/json"
+        }
+      });
+
+      if (!res.ok) throw new Error("Geocode HTTP " + res.status);
+
+      const data = await res.json();
+      if (!data || !data[0]) throw new Error("Nincs találat: " + place);
+
+      const lat = Number(data[0].lat);
+      const lon = Number(data[0].lon);
+
+      const coords = [lat, lon];
+      geoCache.set(place, coords);
+      return coords;
+    }
+
+    // Finom rate limit (ne bombázza szét a Nominatimot)
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    function makePopupHtml(item) {
+      const safe = (s) => String(s ?? "").replace(/[&<>"']/g, m => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+      }[m]));
+      return `
+        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;min-width:240px">
+          <div style="font-size:14px;font-weight:700;margin-bottom:6px">${safe(item.company)}</div>
+          <div style="margin-bottom:6px"><b>Település:</b> ${safe(item.place.replace(", Hungary",""))}</div>
+          <div style="margin-bottom:6px"><b>Réteg:</b> ${safe(item.category)}</div>
+          <div style="color:#333">${safe(item.detail)}</div>
+        </div>
+      `;
+    }
+
+    async function addPoints() {
+      let ok = 0, fail = 0;
+
+      for (let i = 0; i < DATA.length; i++) {
+        const item = DATA[i];
+        setStatus(`Pontok betöltése… ${i+1}/${DATA.length} (ok: ${ok}, hibás: ${fail})`);
+
+        try {
+          const [lat, lon] = await geocode(item.place);
+
+          const color = COLORS[item.category] || "#666";
+          const marker = L.circleMarker([lat, lon], markerStyle(color))
+            .bindPopup(makePopupHtml(item), { maxWidth: 360 });
+
+          layerGroups[item.category].addLayer(marker);
+          ok++;
+        } catch (e) {
+          // Ha valami településnév furán van írva, itt fog látszani.
+          // A térkép ettől még betölt, csak az a pont kimarad.
+          console.warn("Geocode hiba:", item.place, e);
+          fail++;
+        }
+
+        // Nominatim baráti tempó
+        await sleep(220);
+      }
+
+      setStatus(`Kész. Betöltött pontok: ${ok}. Hibás (nem találta a települést): ${fail}.`);
+      // Ha van legalább pár pont, próbáljunk rájuk zoomolni
+      const all = [];
+      Object.values(layerGroups).forEach(g => g.eachLayer(l => {
+        if (l.getLatLng) all.push(l.getLatLng());
+      }));
+      if (all.length) {
+        const bounds = L.latLngBounds(all);
+        map.fitBounds(bounds.pad(0.12));
+      }
+    }
+
+    // =========================
+    // 5) JELMAGYARÁZAT (Legend)
+    // =========================
+    const legend = L.control({ position: "topright" });
+    legend.onAdd = () => {
+      const div = L.DomUtil.create("div", "legend");
+      div.innerHTML = `
+        <h3>Rétegek (nem buborék, nem víz)</h3>
+        ${Object.entries(COLORS).map(([k,v]) => `
+          <div class="row">
+            <span class="swatch" style="background:${v}"></span>
+            <div>${k}</div>
+          </div>
+        `).join("")}
+        <div class="note">
+          Csak a cégek/helyek/települések pontjai vannak. A rétegkapcsolóval ki-be kapcsolod a hálózatot.
+        </div>
+      `;
+      return div;
+    };
+    legend.addTo(map);
+
+    // GO
+    addPoints();
+  </script>
+</body>
+</html>

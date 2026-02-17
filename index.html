@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>MO-i akkumulátoripari térkép — réteges</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- MarkerCluster -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.js"></script>
+
+  <!-- Awesome Markers (színes ikonok) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.5/leaflet.awesome-markers.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Leaflet.awesome-markers/2.0.5/leaflet.awesome-markers.js"></script>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css"/>
+
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { width: 100%; height: 100%; }
+
+    .top-pill {
+      position: fixed;
+      top: 14px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 9999;
+      background: rgba(0,0,0,0.75);
+      color: #fff;
+      padding: 10px 14px;
+      border-radius: 999px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: .2px;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.28);
+      text-align: center;
+      max-width: 92vw;
+    }
+
+    .legend {
+      position: fixed;
+      bottom: 16px;
+      left: 16px;
+      width: 360px;
+      z-index: 9999;
+      background: rgba(255,255,255,0.95);
+      padding: 12px 12px;
+      border-radius: 14px;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.28);
+      font-family: Arial, sans-serif;
+    }
+    .legend .title {
+      font-size: 15px;
+      font-weight: 900;
+      margin-bottom: 6px;
+    }
+    .legend .sub {
+      font-size: 12px;
+      color: #333;
+      margin-bottom: 10px;
+      line-height: 1.25;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      margin: 6px 0;
+      font-size: 13px;
+    }
+    .swatch {
+      width: 12px; height: 12px;
+      border-radius: 3px;
+      margin-right: 8px;
+      border: 1px solid rgba(0,0,0,0.15);
+    }
+    .note {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid rgba(0,0,0,0.08);
+      font-size: 11px;
+      color: #666;
+      line-height: 1.25;
+    }
+
+    /* Layer control kicsit "ütősebb" */
+    .leaflet-control-layers {
+      border-radius: 14px !important;
+      box-shadow: 0 10px 26px rgba(0,0,0,0.20) !important;
+      overflow: hidden;
+    }
+    .leaflet-control-layers-expanded {
+      padding: 10px 12px !important;
+      font-family: Arial, sans-serif;
+      font-size: 13px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="top-pill">Magyarország — akkumulátoripari térkép (rétegek: cellagyár / vegyipar / összeszerelés / hulladék + háttéripar)</div>
+
+  <div class="legend">
+    <div class="title">MO-i akkumulátoripari térkép</div>
+    <div class="sub">
+      Kattints a pontokra: <b>cég</b> + <b>település</b> + <b>típus</b>.<br/>
+      Rétegek jobb felül.
+    </div>
+
+    <div class="row"><span class="swatch" style="background:#d9534f;"></span><b>🔴 Cella-gyár</b> (nagy akkucella)</div>
+    <div class="row"><span class="swatch" style="background:#f0ad4e;"></span><b>🟠 Vegyipar / anyag</b> (katód, szeparátor, elektrolit, fólia)</div>
+    <div class="row"><span class="swatch" style="background:#f7d358;"></span><b>🟡 Összeszerelés / rendszer</b> (modul, pack, autóhoz)</div>
+    <div class="row"><span class="swatch" style="background:#5bc0de;"></span><b>🟢 Háttéripar / kisebb beszállítók</b></div>
+    <div class="row"><span class="swatch" style="background:#5cb85c;"></span><b>🔵 Hulladék / újrahasznosítás</b></div>
+
+    <div class="note">
+      Megjegyzés: a koordináták település-közeli pontok (térképes megjelenítéshez bőven jó).
+      Ha később akarsz <i>ipari park szintű</i> pontosságot, azt külön rá lehet húzni.
+    </div>
+  </div>
+
+  <div id="map"></div>
+
+  <script>
+    // --- Alaptérkép ---
+    const map = L.map('map', { center: [47.2, 19.5], zoom: 7, zoomControl: true });
+
+    const baseOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    });
+
+    const baseLight = L.tileLayer('https://cartodb-basemaps-{s}.global.ssl.fastly.net/light_all/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '&copy; OpenStreetMap &copy; CartoDB'
+    }).addTo(map);
+
+    L.control.scale().addTo(map);
+
+    // --- Ikonok ---
+    const iconCell = L.AwesomeMarkers.icon({ icon: 'battery-full', prefix: 'fa', markerColor: 'red', iconColor: 'white' });
+    const iconChem = L.AwesomeMarkers.icon({ icon: 'flask', prefix: 'fa', markerColor: 'orange', iconColor: 'white' });
+    const iconAssem = L.AwesomeMarkers.icon({ icon: 'cubes', prefix: 'fa', markerColor: 'cadetblue', iconColor: 'white' }); // sárgás helyett jól látható
+    const iconSupply = L.AwesomeMarkers.icon({ icon: 'cogs', prefix: 'fa', markerColor: 'blue', iconColor: 'white' });     // háttéripar
+    const iconWaste = L.AwesomeMarkers.icon({ icon: 'recycle', prefix: 'fa', markerColor: 'green', iconColor: 'white' });
+
+    // --- Rétegek (featureGroup) ---
+    const layerCell = L.featureGroup().addTo(map);
+    const layerChem = L.featureGroup().addTo(map);
+    const layerAssem = L.featureGroup().addTo(map);
+    const layerSupply = L.featureGroup().addTo(map);
+    const layerWaste = L.featureGroup().addTo(map);
+
+    // --- Extra: klaszter (összes pont) ---
+    const clusterAll = L.markerClusterGroup();
+
+    function addPoint(opts) {
+      const {lat, lng, telepules, ceg, tipus, layer, icon} = opts;
+
+      const html = `
+        <div style="font-family: Arial; font-size: 13px; line-height: 1.25;">
+          <div style="font-size: 15px; font-weight: 900; margin-bottom: 6px;">
+            ${telepules} — ${ceg}
+          </div>
+          <div><b>Típus:</b> ${tipus}</div>
+          <div><b>Település:</b> ${telepules}</div>
+          <div><b>Cég/egység:</b> ${ceg}</div>
+        </div>
+      `;
+
+      const m = L.marker([lat, lng], { icon });
+      m.bindPopup(html, { maxWidth: 420 });
+      m.bindTooltip(`${telepules} — ${ceg}`, { sticky: true });
+
+      m.addTo(layer);
+      clusterAll.addLayer(L.marker([lat, lng], { icon }).bindPopup(html, { maxWidth: 420 }).bindTooltip(`${telepules} — ${ceg}`, { sticky: true }));
+    }
+
+    // =========================================================
+    // 🔴 1. NAGY AKKUCELLA-GYÁRTÓK
+    // =========================================================
+    addPoint({ lat: 47.5316, lng: 21.6273, telepules: "Debrecen", ceg: "CATL", tipus: "Akkucella-gyár (nagy gyártó)", layer: layerCell, icon: iconCell });
+    addPoint({ lat: 47.6800, lng: 19.1300, telepules: "Göd", ceg: "Samsung SDI", tipus: "Akkucella-gyár (nagy gyártó)", layer: layerCell, icon: iconCell });
+    addPoint({ lat: 47.7400, lng: 18.1200, telepules: "Komárom", ceg: "SK On", tipus: "Akkucella-gyár (nagy gyártó)", layer: layerCell, icon: iconCell });
+    addPoint({ lat: 47.1600, lng: 18.8200, telepules: "Iváncsa", ceg: "SK On", tipus: "Akkucella-gyár (nagy gyártó)", layer: layerCell, icon: iconCell });
+    addPoint({ lat: 48.1035, lng: 20.7903, telepules: "Miskolc", ceg: "GS Yuasa", tipus: "Akkucella-gyár (nagy gyártó)", layer: layerCell, icon: iconCell });
+
+    // =========================================================
+    // 🟠 2. AKKUALKATRÉSZ-GYÁRTÁS (vegyipar / anyag)
+    // =========================================================
+    // Katód / alapanyag
+    addPoint({ lat: 47.5316, lng: 21.6273, telepules: "Debrecen", ceg: "EcoPro BM", tipus: "Katódanyag gyártás", layer: layerChem, icon: iconChem });
+
+    // Szeparátor
+    addPoint({ lat: 47.5316, lng: 21.6273, telepules: "Debrecen", ceg: "Semcorp", tipus: "Szeparátorfólia / elválasztó", layer: layerChem, icon: iconChem });
+    addPoint({ lat: 47.9500, lng: 21.7200, telepules: "Nyíregyháza", ceg: "W-Scope", tipus: "Szeparátorfólia (projekt)", layer: layerChem, icon: iconChem });
+    addPoint({ lat: 47.7600, lng: 18.5500, telepules: "Nyergesújfalu", ceg: "LG Chem / Toray (említett)", tipus: "Szeparátor / fólia jellegű tevékenység", layer: layerChem, icon: iconChem });
+
+    // Elektrolit / vegyipar
+    addPoint({ lat: 47.4100, lng: 18.8200, telepules: "Sóskút", ceg: "Dongwha", tipus: "Elektrolit / oldószer (vegyi)", layer: layerChem, icon: iconChem });
+    addPoint({ lat: 47.5700, lng: 18.4200, telepules: "Tatabánya", ceg: "Soulbrain", tipus: "Elektrolit gyártás", layer: layerChem, icon: iconChem });
+
+    // Rézfólia / vezető anyag
+    addPoint({ lat: 47.6000, lng: 19.3500, telepules: "Gödöllő", ceg: "Iljin Materials (említett)", tipus: "Rézfólia / vezető anyag jelleg", layer: layerChem, icon: iconChem });
+    addPoint({ lat: 47.5700, lng: 18.4200, telepules: "Tatabánya", ceg: "Solus Advanced Materials (említett)", tipus: "Vezető anyag / fólia jelleg", layer: layerChem, icon: iconChem });
+
+    // =========================================================
+    // 🟡 3. MODUL / ÖSSZESZERELÉS / RENDSZER
+    // =========================================================
+    addPoint({ lat: 47.7400, lng: 18.1200, telepules: "Komárom", ceg: "Inzi Controls", tipus: "Modul/pack, vezérlés", layer: layerAssem, icon: iconAssem });
+    addPoint({ lat: 47.6200, lng: 19.1900, telepules: "Fót", ceg: "Akkumulátor összeszerelés (több cég)", tipus: "Összeszerelés / logisztika", layer: layerAssem, icon: iconAssem });
+    addPoint({ lat: 47.5316, lng: 21.6273, telepules: "Debrecen", ceg: "BMW (akku összeszerelés)", tipus: "Autóhoz akku-integráció / összeszerelés", layer: layerAssem, icon: iconAssem });
+    addPoint({ lat: 47.4700, lng: 18.8200, telepules: "Biatorbágy", ceg: "NIO (akkucsere rendszerek — említett)", tipus: "Rendszer / infrastruktúra", layer: layerAssem, icon: iconAssem });
+
+    // =========================================================
+    // 🟢 4. KISEBB BESZÁLLÍTÓK / ALKATRÉSZGYÁRTÁS (háttéripar)
+    // =========================================================
+    addPoint({ lat: 47.6000, lng: 19.3500, telepules: "Gödöllő", ceg: "Kedali (említett)", tipus: "Fém alkatrészek / háttéripar", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 47.7800, lng: 19.1300, telepules: "Vác", ceg: "Akkurendszerező / logisztika (említett)", tipus: "Logisztika / háttéripar", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 47.6000, lng: 19.3500, telepules: "Gödöllő", ceg: "Akkumulátorház gyártás (említett)", tipus: "Ház / burkolat / háttéripar", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 47.7800, lng: 19.1300, telepules: "Vác", ceg: "Akkumulátorház gyártás (említett)", tipus: "Ház / burkolat / háttéripar", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 47.3500, lng: 19.4500, telepules: "Monor", ceg: "Akkukeret gyártás (említett)", tipus: "Keret / szerkezeti elem", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 47.5000, lng: 19.9100, telepules: "Jászberény", ceg: "Alkatrészgyártás (említett)", tipus: "Gépipari beszállító", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 47.4900, lng: 19.3400, telepules: "Pécel", ceg: "Gépipari beszállító (említett)", tipus: "Gépipar / háttéripar", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 48.1000, lng: 19.8000, telepules: "Salgótarján", ceg: "Precíziós alkatrészek (említett)", tipus: "Precíziós beszállító", layer: layerSupply, icon: iconSupply });
+    addPoint({ lat: 47.5500, lng: 18.3200, telepules: "Tatabánya térsége", ceg: "Lotte Aluminium (említett)", tipus: "Alu/fólia jellegű beszállító", layer: layerSupply, icon: iconSupply });
+
+    // =========================================================
+    // 🔵 5. ÚJRAHASZNOSÍTÁS / HULLADÉK
+    // =========================================================
+    addPoint({ lat: 47.3500, lng: 19.0400, telepules: "Szigetszentmiklós", ceg: "SungEel HiTech", tipus: "Akkumulátorhulladék / újrahasznosítás", layer: layerWaste, icon: iconWaste });
+    addPoint({ lat: 47.9700, lng: 19.8400, telepules: "Bátonyterenye", ceg: "SungEel HiTech", tipus: "Akkumulátorhulladék / újrahasznosítás", layer: layerWaste, icon: iconWaste });
+
+    // =========================================================
+    // ⚫ 6. EGYÉB KAPCSOLÓDÓ HELYEK (külön réteg helyett: háttériparba)
+    // =========================================================
+    addPoint({ lat: 47.6900, lng: 17.6500, telepules: "Győr", ceg: "Potenciális akkuipari beszállítók (említett)", tipus: "Kapcsolódó ipari beszállítói bázis", layer: layerSupply, icon: iconSupply });
+
+    // --- Rétegkezelő ---
+    const baseLayers = {
+      "Világos (CartoDB)": baseLight,
+      "OSM (alap)": baseOSM
+    };
+
+    const overlays = {
+      "🔴 Cella-gyár (nagy akkucella)": layerCell,
+      "🟠 Vegyipar / anyag (katód, szeparátor, elektrolit, fólia)": layerChem,
+      "🟡 Összeszerelés / rendszer (modul, pack, autóhoz)": layerAssem,
+      "🟢 Háttéripar / kisebb beszállítók": layerSupply,
+      "🔵 Hulladék / újrahasznosítás": layerWaste,
+      "📌 Összes pont (klaszter nézet)": clusterAll
+    };
+
+    L.control.layers(baseLayers, overlays, { collapsed: false, position: "topright" }).addTo(map);
+
+    // Klasztert alapból ne rakjuk rá (ha akarod, majd bekapcsolod a rétegnél)
+    // map.addLayer(clusterAll); // ha mégis alapból kéred, vedd ki a kommentet
+
+  </script>
+</body>
+</html>

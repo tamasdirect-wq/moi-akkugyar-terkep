@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="hu">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>MO-i akkumulátoripari helyszínek (rétegek)</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100vh; width: 100vw; }
+    .legend {
+      background: rgba(255,255,255,0.95);
+      padding: 10px 12px;
+      border-radius: 10px;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+      font: 14px/1.3 Arial, sans-serif;
+      max-width: 320px;
+    }
+    .legend h3 { margin: 0 0 6px 0; font-size: 16px; }
+    .dot {
+      display:inline-block; width:10px; height:10px; border-radius:50%;
+      margin-right:8px; vertical-align:middle;
+      border: 2px solid rgba(0,0,0,0.25);
+    }
+    .muted { color:#444; font-size:12px; margin-top:6px; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script>
+  // ===== Alaptérkép =====
+  const map = L.map('map', { zoomControl: true }).setView([47.20, 19.50], 7);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap'
+  }).addTo(map);
+
+  // ===== Színek (ahogy kérted) =====
+  const COLORS = {
+    cella:   "#d81b1b", // piros
+    anyag:   "#f08a00", // narancs
+    modul:   "#f1c40f", // sárga
+    besz:    "#21a653", // zöld
+    hull:    "#1e5bd9", // kék
+    egyeb:   "#444444"  // fekete/szürke
+  };
+
+  function marker(lat, lng, color, title, city, desc) {
+    return L.circleMarker([lat, lng], {
+      radius: 7,
+      color: color,
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 0.9
+    }).bindPopup(
+      `<b>${title}</b><br>${city}${desc ? `<br><span style="color:#333">${desc}</span>` : ""}`
+    );
+  }
+
+  // ===== Rétegcsoportok =====
+  const layerCella = L.layerGroup();
+  const layerAnyag = L.layerGroup();
+  const layerModul = L.layerGroup();
+  const layerBesz  = L.layerGroup();
+  const layerHull  = L.layerGroup();
+  const layerEgyeb = L.layerGroup();
+
+  // ===== ADATOK (a te listádból, cégnév + település + tevékenység) =====
+  // Megjegyzés: ha később pontosítjuk a koordinátákat telephely-szinten, ezt ugyanitt cseréljük.
+
+  // 🔴 1. NAGY AKKUCELLA-GYÁRTÓK
+  layerCella.addLayer(marker(47.5316, 21.6273, COLORS.cella, "CATL", "Debrecen", "Akkucella-gyár"));
+  layerCella.addLayer(marker(47.6920, 19.1380, COLORS.cella, "Samsung SDI", "Göd", "Akkucella-gyár"));
+  layerCella.addLayer(marker(47.7430, 18.1260, COLORS.cella, "SK On", "Komárom", "Akkucella-gyár"));
+  layerCella.addLayer(marker(47.1570, 18.8260, COLORS.cella, "SK On", "Iváncsa", "Akkucella-gyár"));
+  layerCella.addLayer(marker(48.1030, 20.7900, COLORS.cella, "GS Yuasa", "Miskolc", "Akkucella-gyár"));
+
+  // 🟠 2. AKKUALKATRÉSZ / VEGYIPAR
+  layerAnyag.addLayer(marker(47.5316, 21.6273, COLORS.anyag, "EcoPro BM", "Debrecen", "Katód / alapanyag"));
+  layerAnyag.addLayer(marker(47.5316, 21.6273, COLORS.anyag, "Semcorp", "Debrecen", "Szeparátor"));
+  layerAnyag.addLayer(marker(47.9550, 21.7160, COLORS.anyag, "W-Scope", "Nyíregyháza", "Szeparátor"));
+  layerAnyag.addLayer(marker(47.8090, 18.5540, COLORS.anyag, "LG Chem / Toray", "Nyergesújfalu", "Szeparátor / anyag"));
+  layerAnyag.addLayer(marker(47.4050, 18.8300, COLORS.anyag, "Dongwha", "Sóskút", "Elektrolit / vegyipar"));
+  layerAnyag.addLayer(marker(47.5690, 18.4040, COLORS.anyag, "Soulbrain", "Tatabánya", "Elektrolit / vegyipar"));
+  layerAnyag.addLayer(marker(47.5960, 19.3500, COLORS.anyag, "Iljin Materials", "Gödöllő", "Rézfólia / vezető anyag"));
+  layerAnyag.addLayer(marker(47.5690, 18.4040, COLORS.anyag, "Solus Advanced Materials", "Tatabánya", "Rézfólia / vezető anyag"));
+
+  // 🟡 3. MODUL / ÖSSZESZERELÉS / RENDSZER
+  layerModul.addLayer(marker(47.7430, 18.1260, COLORS.modul, "Inzi Controls", "Komárom", "Modul / összeszerelés"));
+  layerModul.addLayer(marker(47.6160, 19.1900, COLORS.modul, "Akkumulátor összeszerelés (több cég)", "Fót", "Modul / összeszerelés"));
+  layerModul.addLayer(marker(47.5316, 21.6273, COLORS.modul, "BMW", "Debrecen", "Akkumulátor-összeszerelés az autóhoz"));
+  layerModul.addLayer(marker(47.4720, 18.8250, COLORS.modul, "NIO", "Biatorbágy", "Akkucsere / rendszer"));
+
+  // 🟢 4. KISEBB BESZÁLLÍTÓK / HÁTTÉRIPAR
+  layerBesz.addLayer(marker(47.5960, 19.3500, COLORS.besz, "Kedali", "Gödöllő", "Fém alkatrészek"));
+  layerBesz.addLayer(marker(47.7750, 19.1340, COLORS.besz, "Akkurendszerező / logisztika", "Vác", "Beszállító / logisztika"));
+  layerBesz.addLayer(marker(47.5960, 19.3500, COLORS.besz, "Akkumulátorház gyártás", "Gödöllő", "Akkumulátorház"));
+  layerBesz.addLayer(marker(47.7750, 19.1340, COLORS.besz, "Akkumulátorház gyártás", "Vác", "Akkumulátorház"));
+  layerBesz.addLayer(marker(47.3470, 19.4470, COLORS.besz, "Akkukeret gyártás", "Monor", "Keret / alkatrész"));
+  layerBesz.addLayer(marker(47.5000, 19.9100, COLORS.besz, "Alkatrészgyártás", "Jászberény", "Beszállító"));
+  layerBesz.addLayer(marker(47.4890, 19.3410, COLORS.besz, "Gépipari beszállító", "Pécel", "Beszállító"));
+  layerBesz.addLayer(marker(48.1030, 19.8100, COLORS.besz, "Precíziós alkatrészek", "Salgótarján", "Beszállító"));
+  layerBesz.addLayer(marker(47.5690, 18.4040, COLORS.besz, "Lotte Aluminium", "Tatabánya", "Alumínium fólia / alkatrész"));
+
+  // 🔵 5. ÚJRAHASZNOSÍTÁS / HULLADÉK
+  layerHull.addLayer(marker(47.3430, 19.0430, COLORS.hull, "SungEel Hitech", "Szigetszentmiklós", "Hulladék / újrahasznosítás"));
+  layerHull.addLayer(marker(48.0200, 19.8300, COLORS.hull, "SungEel Hitech", "Bátonyterenye", "Hulladék / újrahasznosítás"));
+
+  // ⚫ 6. EGYÉB KAPCSOLÓDÓ
+  layerEgyeb.addLayer(marker(47.6870, 17.6500, COLORS.egyeb, "Potenciális akkuipari beszállítók", "Győr", "Egyéb kapcsolódó"));
+
+  // ===== Alapértelmezett: minden réteg be =====
+  layerCella.addTo(map);
+  layerAnyag.addTo(map);
+  layerModul.addTo(map);
+  layerBesz.addTo(map);
+  layerHull.addTo(map);
+  layerEgyeb.addTo(map);
+
+  // ===== Rétegkapcsoló =====
+  const overlays = {
+    "🔴 Cella-gyár": layerCella,
+    "🟠 Anyag / vegyipar / alkatrész": layerAnyag,
+    "🟡 Modul / összeszerelés / rendszer": layerModul,
+    "🟢 Kisebb beszállítók / háttéripar": layerBesz,
+    "🔵 Újrahasznosítás / hulladék": layerHull,
+    "⚫ Egyéb kapcsolódó": layerEgyeb
+  };
+  L.control.layers(null, overlays, { collapsed: false }).addTo(map);
+
+  // ===== Legend (csak a kért szöveg) =====
+  const legend = L.control({ position: 'topleft' });
+  legend.onAdd = function() {
+    const div = L.DomUtil.create('div', 'legend');
+    div.innerHTML = `
+      <h3>MO-i akkumulátoripari helyszínek (rétegek)</h3>
+      <div class="muted">Kapcsold a rétegeket. Kattints a pontokra: név + település + tevékenység.</div>
+      <div style="margin-top:8px">
+        <div><span class="dot" style="background:${COLORS.cella}"></span> Cella-gyár</div>
+        <div><span class="dot" style="background:${COLORS.anyag}"></span> Anyag / vegyipar / alkatrész</div>
+        <div><span class="dot" style="background:${COLORS.modul}"></span> Modul / összeszerelés / rendszer</div>
+        <div><span class="dot" style="background:${COLORS.besz}"></span> Kisebb beszállítók / háttéripar</div>
+        <div><span class="dot" style="background:${COLORS.hull}"></span> Újrahasznosítás / hulladék</div>
+        <div><span class="dot" style="background:${COLORS.egyeb}"></span> Egyéb kapcsolódó</div>
+      </div>
+    `;
+    return div;
+  };
+  legend.addTo(map);
+</script>
+</body>
+</html>
